@@ -30,6 +30,11 @@ namespace TabStream
         private bool isUserSeeking = false;
         private List<AudioTrack> audioTracks;
         private int trackCounter = 1;
+        // === ОТМЕНЕНО: поля для синхронизации playhead ===
+        //private bool isMultiTrackPlaying = false; // идет ли воспроизведение индивидуальных треков
+        //private DateTime multiTrackStartTime; // время старта
+        //private double multiTrackPausedOffset = 0; // смещение при паузе
+        //private double multiTrackDuration = 0; // максимальная длительность среди активных треков
 
         public MainWindow()
         {
@@ -134,6 +139,15 @@ namespace TabStream
         {
             if (audioTracks == null) return;
 
+            double duration = totalDuration;
+            double position = currentPosition;
+            // === ОТМЕНЕНО: для многодорожечного режима использовать multiTrackDuration ===
+            //if (isMultiTrackPlaying)
+            //{
+            //    duration = multiTrackDuration / 1000.0;
+            //    position = currentPosition;
+            //}
+
             foreach (var track in audioTracks)
             {
                 track.UpdatePlayhead(currentPosition, totalDuration);
@@ -145,19 +159,73 @@ namespace TabStream
         {
             if (!isPlaying)
             {
-                if (mediaPlayer.Source == null)
+                // ДОБАВЛЕНО: Запуск всех индивидуальных треков
+                bool anyTrackPlayed = false;
+                //double minStart = double.MaxValue;
+                //double maxEnd = 0;
+                foreach (var track in audioTracks)
                 {
-                    LoadAudioFile();
-                    return;
+                    var playTrackMethod = track.GetType().GetMethod("PlayTrack");
+                    var hasAudioField = track.GetType().GetField("audioFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    //var trimStartField = track.GetType().GetField("trimStartMs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    //var trimEndField = track.GetType().GetField("trimEndMs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (playTrackMethod != null && hasAudioField != null && !string.IsNullOrEmpty((string)hasAudioField.GetValue(track)))
+                    {
+                        //double trimStart = trimStartField != null ? (double)trimStartField.GetValue(track) : 0;
+                        //double trimEnd = trimEndField != null ? (double)trimEndField.GetValue(track) : 0;
+                        //if (trimStart < minStart) minStart = trimStart;
+                        //if (trimEnd > maxEnd) maxEnd = trimEnd;
+                        playTrackMethod.Invoke(track, new object[] { VolumeSlider.Value / 100.0, SpeedSlider.Value });
+                        anyTrackPlayed = true;
+                    }
                 }
-                
-                StartPlayback();
+                if (anyTrackPlayed)
+                {
+                    isPlaying = true;
+                    isPaused = false;
+                    PlayButton.Content = "⏸ Pause";
+                    // === ОТМЕНЕНО: старт синхронизации playhead ===
+                    //isMultiTrackPlaying = true;
+                    //multiTrackStartTime = DateTime.Now;
+                    //multiTrackPausedOffset = 0;
+                    //multiTrackDuration = (maxEnd > minStart) ? (maxEnd - minStart) : 0;
+                    StartPlayback();
+                }
+                else
+                {
+                    // fallback на старую логику
+                    if (mediaPlayer.Source == null)
+                    {
+                        LoadAudioFile();
+                        return;
+                    }
+                    StartPlayback();
+                }
             }
         }
 
         private void StopButton_Click(object sender, RoutedEventArgs e)
         {
+            // ДОБАВЛЕНО: Остановить все индивидуальные треки
+            foreach (var track in audioTracks)
+            {
+                var stopTrackMethod = track.GetType().GetMethod("StopTrack");
+                var hasAudioField = track.GetType().GetField("audioFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (stopTrackMethod != null && hasAudioField != null && !string.IsNullOrEmpty((string)hasAudioField.GetValue(track)))
+                {
+                    stopTrackMethod.Invoke(track, null);
+                }
+            }
+            isPlaying = false;
+            isPaused = false;
+            PlayButton.Content = "▶ Play";
             StopPlayback();
+            // === ОТМЕНЕНО: сброс синхронизации playhead ===
+            //isMultiTrackPlaying = false;
+            //multiTrackPausedOffset = 0;
+            //timer.Stop();
+            //currentPosition = 0;
+            //UpdateAllTracks();
         }
 
         private void PauseButton_Click(object sender, RoutedEventArgs e)
@@ -166,11 +234,47 @@ namespace TabStream
             {
                 if (isPaused)
                 {
+                    // ДОБАВЛЕНО: Resume все индивидуальные треки
+                    foreach (var track in audioTracks)
+                    {
+                        var resumeTrackMethod = track.GetType().GetMethod("ResumeTrack");
+                        var hasAudioField = track.GetType().GetField("audioFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (resumeTrackMethod != null && hasAudioField != null && !string.IsNullOrEmpty((string)hasAudioField.GetValue(track)))
+                        {
+                            resumeTrackMethod.Invoke(track, null);
+                        }
+                    }
+                    isPaused = false;
+                    PlayButton.Content = "⏸ Pause";
                     ResumePlayback();
+                    // === ОТМЕНЕНО: продолжить таймер ===
+                    //if (isMultiTrackPlaying)
+                    //{
+                    //    multiTrackStartTime = DateTime.Now.AddMilliseconds(-multiTrackPausedOffset);
+                    //    timer.Start();
+                    //}
                 }
                 else
                 {
+                    // ДОБАВЛЕНО: Pause все индивидуальные треки
+                    foreach (var track in audioTracks)
+                    {
+                        var pauseTrackMethod = track.GetType().GetMethod("PauseTrack");
+                        var hasAudioField = track.GetType().GetField("audioFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (pauseTrackMethod != null && hasAudioField != null && !string.IsNullOrEmpty((string)hasAudioField.GetValue(track)))
+                        {
+                            pauseTrackMethod.Invoke(track, null);
+                        }
+                    }
+                    isPaused = true;
+                    PlayButton.Content = "▶ Resume";
                     PausePlayback();
+                    // === ОТМЕНЕНО: пауза таймера ===
+                    //if (isMultiTrackPlaying)
+                    //{
+                    //    multiTrackPausedOffset = (DateTime.Now - multiTrackStartTime).TotalMilliseconds;
+                    //    timer.Stop();
+                    //}
                 }
             }
         }
@@ -263,6 +367,34 @@ namespace TabStream
 
         private void Timer_Tick(object sender, EventArgs e)
         {
+            //if (isMultiTrackPlaying)
+            //{
+            //    double elapsed = (DateTime.Now - multiTrackStartTime).TotalMilliseconds;
+            //    if (isPaused) elapsed = multiTrackPausedOffset;
+            //    if (elapsed > multiTrackDuration) elapsed = multiTrackDuration;
+            //    currentPosition = elapsed / 1000.0; // секунды
+            //    // === ОТМЕНЕНО: всегда обновлять дорожки ===
+            //    //UpdateAllTracks();
+            //    UpdateProgress();
+            //    // Если дошли до конца — стоп
+            //    if (elapsed >= multiTrackDuration)
+            //    {
+            //        foreach (var track in audioTracks)
+            //        {
+            //            var stopTrackMethod = track.GetType().GetMethod("StopTrack");
+            //            var hasAudioField = track.GetType().GetField("audioFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            //            if (stopTrackMethod != null && hasAudioField != null && !string.IsNullOrEmpty((string)hasAudioField.GetValue(track)))
+            //            {
+            //                stopTrackMethod.Invoke(track, null);
+            //            }
+            //        }
+            //        isMultiTrackPlaying = false;
+            //        isPlaying = false;
+            //        PlayButton.Content = "▶ Play";
+            //        timer.Stop();
+            //    }
+            //}
+            //else 
             if (isPlaying && !isPaused)
             {
                 currentPosition = mediaPlayer.Position.TotalSeconds;
