@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace TabStream.Properties
+namespace TabStream2.Properties
 {
 
 

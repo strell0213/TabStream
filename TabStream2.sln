@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35818.85 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TabStream2", "TabStream2\TabStream2.csproj", "{9BEC3C8A-2B8D-4EE3-BF20-B2C82AD05FAE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9BEC3C8A-2B8D-4EE3-BF20-B2C82AD05FAE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9BEC3C8A-2B8D-4EE3-BF20-B2C82AD05FAE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9BEC3C8A-2B8D-4EE3-BF20-B2C82AD05FAE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9BEC3C8A-2B8D-4EE3-BF20-B2C82AD05FAE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C9D69BB8-A708-4F5E-A2E8-2838E9D42A3A}
+	EndGlobalSection
+EndGlobal

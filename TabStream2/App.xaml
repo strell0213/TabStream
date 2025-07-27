@@ -1,7 +1,7 @@
-﻿<Application x:Class="TabStream.App"
+﻿<Application x:Class="TabStream2.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:TabStream"
+             xmlns:local="clr-namespace:TabStream2"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
          
