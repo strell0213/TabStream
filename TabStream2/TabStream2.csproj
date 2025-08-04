@@ -68,6 +68,8 @@
     <Compile Include="Model\NotifyBase.cs" />
     <Compile Include="Model\Playhead.cs" />
     <Compile Include="Model\RelayCommand.cs" />
+    <Compile Include="Model\Track.cs" />
+    <Compile Include="Services\TrackService.cs" />
     <Compile Include="ViewModel\MainViewModal.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>

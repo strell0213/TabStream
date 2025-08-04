@@ -64,8 +64,8 @@
                         <ScrollViewer Grid.Column="1" x:Name="TimeRulerScrollViewer"
                           HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Disabled"
-                          Background="#FF333333">
-                            <Canvas x:Name="TimeRuler" Height="30" Background="#FF333333">
+                          Background="Transparent">
+                            <Canvas x:Name="TimeRuler" Height="30" Background="#FF333333" MouseLeftButtonDown="TimeRuler_MouseLeftButtonDown" MouseLeftButtonUp="TimeRuler_MouseLeftButtonUp" MouseMove="TimeRuler_MouseMove">
                                 <Border BorderBrush="#FF555555" BorderThickness="0,0,0,1"/>
                             </Canvas>
                         </ScrollViewer>
@@ -74,7 +74,7 @@
 
                 <!-- === Track Names (left) === -->
                 <ScrollViewer Grid.Row="1" Grid.Column="0" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Name="TrackNamesScrollViewer">
-                    <StackPanel x:Name="TrackNameList" Background="#FF2B2B2B">
+                    <StackPanel x:Name="TrackNameList" Background="#FF2B2B2B" Width="147">
                         <!-- Track names will be added here dynamically -->
                     </StackPanel>
                 </ScrollViewer>
@@ -83,8 +83,7 @@
                 <ScrollViewer Grid.Row="1" Grid.Column="1"
                   x:Name="TracksScrollViewer"
                   VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Auto"
-                  ScrollChanged="TracksScrollViewer_ScrollChanged">
+                  HorizontalScrollBarVisibility="Auto">
                     <StackPanel x:Name="TracksContainer" Background="#FF252525">
                         <!-- Tracks will be added here dynamically -->
                     </StackPanel>

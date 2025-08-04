@@ -14,6 +14,12 @@ namespace TabStream2.Model
         public Brush PlayheadColor { get; set; }
 
 
-        Playhead() { }
+        public Playhead() { }
+
+        public Playhead(double currentPos, Brush playheadColor)
+        {
+            CurrentPos = currentPos;
+            PlayheadColor = playheadColor;
+        }
     }
 }
