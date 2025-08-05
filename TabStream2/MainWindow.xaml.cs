@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -32,6 +33,7 @@ namespace TabStream2
             DrawTimeRuler();
 
             playhead = new Playhead(0, PlayheadLine.Stroke);
+            audioTracks = new List<AudioTrack>();
             listTrack = new List<Track>();
             GenerateTracks();
         }
@@ -120,13 +122,21 @@ namespace TabStream2
                 nameBorder.Child = nameText;
                 TrackNameList.Children.Add(nameBorder);
 
-                // === Правая часть: TracksContainer (фон с разделительной линией) ===
+                // Вложенный Canvas внутри Border
+                Canvas trackCanvas = new Canvas
+                {
+                    Background = Brushes.Transparent,
+                    Width = double.NaN, // Автоматическая ширина
+                    Height = trackHeight
+                };
+
                 Border trackRow = new Border
                 {
                     Height = trackHeight,
                     BorderBrush = Brushes.Gray,
                     BorderThickness = new Thickness(0, 0, 0, 1),
-                    Background = new SolidColorBrush(Color.FromRgb(37, 37, 37))
+                    Background = new SolidColorBrush(Color.FromRgb(37, 37, 37)),
+                    Child = trackCanvas
                 };
 
                 TracksContainer.Children.Add(trackRow);
@@ -160,6 +170,99 @@ namespace TabStream2
             double pixelsPerSecond = 20.0;
             playhead.CurrentPos = x / pixelsPerSecond;
             UpdatePlayheadPosition();
+        }
+
+        private void TracksScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            TrackNamesScrollViewer.ScrollToVerticalOffset(e.VerticalOffset);
+        }
+
+        private void TrackNamesScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            e.Handled = true; // блокируем прокрутку вручную
+        }
+
+        private void Window_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effects = DragDropEffects.Copy;
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+            }
+
+            e.Handled = true;
+        }
+
+        private void Window_Drop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                foreach (var file in files)
+                {
+                    string extension = System.IO.Path.GetExtension(file).ToLower();
+                    bool v = (extension == ".mp3" || extension == ".wav");
+                    if (v)
+                    {
+                        // Пример создания AudioTrack
+                        var id = audioTracks.Count + 1;
+                        var audioTrack = new AudioTrack(
+                            iDAudioTrack: id,
+                            fileName: System.IO.Path.GetFileName(file),
+                            audioPath: new Uri(file),
+                            startMs: 0,
+                            endMs: 5000,
+                            iDTrack: 1 // по умолчанию первая дорожка
+                        );
+
+                        audioTracks.Add(audioTrack);
+                        RenderAudioClip(audioTrack);
+                    }
+                }
+            }
+        }
+
+        public void RenderAudioClip(AudioTrack track)
+        {
+            // Найдём нужный контейнер по IDTrack
+            if (track.IDTrack - 1 < 0 || track.IDTrack - 1 >= TracksContainer.Children.Count)
+                return;
+
+            var border = TracksContainer.Children[track.IDTrack - 1] as Border;
+            var targetRow = border?.Child as Canvas;
+            if (targetRow == null)
+                return;
+
+            double totalMs = 60000; // Например, длина таймлайна — 1 минута
+            double canvasWidth = TimeRuler.ActualWidth;
+
+            double left = (track.StartMs / totalMs) * canvasWidth;
+            double width = ((track.EndMs - track.StartMs) / totalMs) * canvasWidth;
+
+            var clipRect = new Border
+            {
+                Width = width,
+                Height = 60,
+                Background = Brushes.SteelBlue,
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(3),
+                Child = new TextBlock
+                {
+                    Text = track.FileName,
+                    Foreground = Brushes.White,
+                    Margin = new Thickness(5, 2, 5, 2),
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+
+            Canvas.SetLeft(clipRect, left);
+            Canvas.SetTop(clipRect, 10);
+
+            targetRow.Children.Add(clipRect);
         }
     }
 }

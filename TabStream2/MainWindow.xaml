@@ -6,7 +6,7 @@
         xmlns:viewmodel="clr-namespace:TabStream2.ViewModel"
         xmlns:local="clr-namespace:TabStream2"
         mc:Ignorable="d"
-        Title="TabStream" Height="1080" Width="1920" WindowStartupLocation="CenterScreen" WindowState="Maximized">
+        Title="TabStream" Height="1080" Width="1920" WindowStartupLocation="CenterScreen" WindowState="Maximized" DragOver="Window_DragOver" Drop="Window_Drop" AllowDrop="True">
 
     <Window.DataContext>
         <viewmodel:MainViewModal/>
@@ -73,7 +73,7 @@
                 </Border>
 
                 <!-- === Track Names (left) === -->
-                <ScrollViewer Grid.Row="1" Grid.Column="0" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Name="TrackNamesScrollViewer">
+                <ScrollViewer Grid.Row="1" Grid.Column="0" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Name="TrackNamesScrollViewer" PreviewMouseWheel="TrackNamesScrollViewer_PreviewMouseWheel">
                     <StackPanel x:Name="TrackNameList" Background="#FF2B2B2B" Width="147">
                         <!-- Track names will be added here dynamically -->
                     </StackPanel>
@@ -83,7 +83,7 @@
                 <ScrollViewer Grid.Row="1" Grid.Column="1"
                   x:Name="TracksScrollViewer"
                   VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Auto">
+                  HorizontalScrollBarVisibility="Auto" ScrollChanged="TracksScrollViewer_ScrollChanged">
                     <StackPanel x:Name="TracksContainer" Background="#FF252525">
                         <!-- Tracks will be added here dynamically -->
                     </StackPanel>
