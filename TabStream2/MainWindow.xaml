@@ -62,10 +62,15 @@
                         <TextBlock Grid.Column="0" Text="Track Name" Foreground="White" VerticalAlignment="Center" Margin="5,0" FontWeight="Bold"/>
 
                         <ScrollViewer Grid.Column="1" x:Name="TimeRulerScrollViewer"
-                          HorizontalScrollBarVisibility="Disabled"
+                          HorizontalScrollBarVisibility="Hidden"
                           VerticalScrollBarVisibility="Disabled"
-                          Background="Transparent">
+                          Background="Transparent"
+                          PreviewMouseWheel="TimeRulerScrollViewer_PreviewMouseWheel"
+                          ScrollChanged="TimeRulerScrollViewer_ScrollChanged">
                             <Canvas x:Name="TimeRuler" Height="30" Background="#FF333333" MouseLeftButtonDown="TimeRuler_MouseLeftButtonDown" MouseLeftButtonUp="TimeRuler_MouseLeftButtonUp" MouseMove="TimeRuler_MouseMove">
+                                <Canvas.LayoutTransform>
+                                    <ScaleTransform x:Name="TimeRulerScale" ScaleX="1" ScaleY="1"/>
+                                </Canvas.LayoutTransform>
                                 <Border BorderBrush="#FF555555" BorderThickness="0,0,0,1"/>
                             </Canvas>
                         </ScrollViewer>
@@ -85,12 +90,15 @@
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Auto" ScrollChanged="TracksScrollViewer_ScrollChanged">
                     <StackPanel x:Name="TracksContainer" Background="#FF252525">
+                        <StackPanel.LayoutTransform>
+                            <ScaleTransform x:Name="TracksScale" ScaleX="1" ScaleY="1"/>
+                        </StackPanel.LayoutTransform>
                         <!-- Tracks will be added here dynamically -->
                     </StackPanel>
                 </ScrollViewer>
 
                 <!-- === Playhead Overlay === -->
-                <Canvas IsHitTestVisible="False" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1">
+                <Canvas x:Name="CPlayheadCanvas" IsHitTestVisible="False" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,30,0,0">
                     <Line x:Name="PlayheadLine"
                         Stroke="Red"
                         StrokeThickness="2"
