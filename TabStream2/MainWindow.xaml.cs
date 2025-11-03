@@ -14,6 +14,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using TabStream2.Model;
+using NAudio.Wave;
 
 namespace TabStream2
 {
@@ -25,17 +26,23 @@ namespace TabStream2
         Playhead playhead;
         List<AudioTrack> audioTracks;
         List<Track> listTrack;
+        static IWavePlayer outputDevice;
 
         bool isDraggingPlayhead=false;
         double zoomScale = 1.0;
         const double MinZoom = 0.2;
         const double MaxZoom = 8.0;
         const double PixelsPerSecondBase = 20.0;
+            // Смещение временной шкалы в секундах (окно просмотра)
+            double timeOffsetSeconds = 0.0;
+            // Максимальная длительность: 10:00:00 = 36000 сек
+            const double MaxTimelineSeconds = 36000.0;
         public MainWindow()
         {
             InitializeComponent();
             DrawTimeRuler();
 
+            outputDevice = new WaveOutEvent();
             playhead = new Playhead(0, PlayheadLine.Stroke);
             audioTracks = new List<AudioTrack>();
             listTrack = new List<Track>();
@@ -47,13 +54,20 @@ namespace TabStream2
             TimeRuler.Children.Clear();
 
             double pixelsPerSecond = PixelsPerSecondBase; // базовая шкала, масштабируется через LayoutTransform
-            int maxSeconds = 10000;
-            double rulerWidth = pixelsPerSecond * maxSeconds;
-            TimeRuler.Width = rulerWidth;
 
-            for (int i = 0; i <= maxSeconds; i += 5)
+            // Полная ширина по всей таймлинейке (до 10:00:00)
+            double rulerWidth = pixelsPerSecond * MaxTimelineSeconds;
+            TimeRuler.Width = rulerWidth;
+            CPlayheadCanvas.Width = rulerWidth;
+            // ВАЖНО: ширину ScrollViewer не увеличиваем, он должен оставаться в размере колонки.
+            // Контент внутри должен быть широким, чтобы появилась горизонтальная прокрутка.
+            TracksContainer.Width = rulerWidth;
+
+            // Метки каждые 5 секунд по всей длине
+            int tickStep = 5;
+            for (int s = 0; s <= MaxTimelineSeconds; s += tickStep)
             {
-                double x = i * pixelsPerSecond;
+                double x = s * pixelsPerSecond;
 
                 Line marker = new Line
                 {
@@ -67,7 +81,7 @@ namespace TabStream2
 
                 TextBlock label = new TextBlock
                 {
-                    Text = TimeSpan.FromSeconds(i).ToString(@"mm\:ss"),
+                    Text = TimeSpan.FromSeconds(s).ToString(@"mm\:ss"),
                     Foreground = Brushes.White,
                     FontSize = 9
                 };
@@ -134,7 +148,7 @@ namespace TabStream2
                 Canvas trackCanvas = new Canvas
                 {
                     Background = Brushes.Transparent,
-                    Width = double.NaN, // Автоматическая ширина
+                    Width = TracksContainer.Width, // Автоматическая ширина
                     Height = trackHeight
                 };
 
@@ -153,52 +167,16 @@ namespace TabStream2
 
         private void TimeRuler_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            //isDraggingPlayhead = true;
-            //TimeRuler.CaptureMouse(); // захват мыши
-            
-            //// Получаем позицию мыши относительно TimeRuler
-            //double mouseX = e.GetPosition(TimeRuler).X;
-            
-            //// Преобразуем в позицию на немасштабированном TimeRuler
-            //double absoluteX = mouseX / zoomScale;
-            
-            //// Добавляем смещение прокрутки
-            //double scrollOffset = TimeRulerScrollViewer.HorizontalOffset;
-            //double finalAbsoluteX = absoluteX + scrollOffset;
-            
-            //// Сохраняем абсолютную позицию в playhead
-            //playhead.CurrentPos = finalAbsoluteX;
-            
-            //// Отладочная информация
-            //System.Diagnostics.Debug.WriteLine($"MouseClick - mouseX: {mouseX:F2}, zoomScale: {zoomScale:F2}, absoluteX: {absoluteX:F2}, scrollOffset: {scrollOffset:F2}, finalAbsoluteX: {finalAbsoluteX:F2}");
-            
-            //// Устанавливаем PlayHead в позицию мыши
-            //Canvas.SetLeft(PlayheadLine, mouseX);
+
         }
 
         private void TimeRuler_MouseMove(object sender, MouseEventArgs e)
         {
-            //if (isDraggingPlayhead)
-            //{
-            //    double mouseX = e.GetPosition(TimeRuler).X;
-                
-            //    // Преобразуем в абсолютную позицию
-            //    double absoluteX = mouseX / zoomScale;
-            //    double scrollOffset = TimeRulerScrollViewer.HorizontalOffset;
-            //    double finalAbsoluteX = absoluteX + scrollOffset;
-                
-            //    // Сохраняем абсолютную позицию
-            //    playhead.CurrentPos = finalAbsoluteX;
-                
-            //    // Перемещаем PlayHead за мышью
-            //    Canvas.SetLeft(PlayheadLine, mouseX);
-            //}
         }
 
         private void TimeRuler_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            //isDraggingPlayhead = false;
-            //TimeRuler.ReleaseMouseCapture(); // отпускаем мышь
+
         }
 
         private void UpdatePlayheadPosition()
@@ -251,16 +229,22 @@ namespace TabStream2
                     bool v = (extension == ".mp3" || extension == ".wav");
                     if (v)
                     {
-                        // Пример создания AudioTrack
-                        var id = audioTracks.Count + 1;
+                        double totalSeconds = 0;
+                        using (var audioFile = new AudioFileReader(file))
+                        {
+                            totalSeconds = audioFile.TotalTime.TotalSeconds;
+                        }
+
+                            // Пример создания AudioTrack
+                            var id = audioTracks.Count + 1;
                         var audioTrack = new AudioTrack(
                             iDAudioTrack: id,
                             fileName: System.IO.Path.GetFileName(file),
                             audioPath: new Uri(file),
                             startMs: 0,
-                            endMs: 5000,
-                            iDTrack: 1 // по умолчанию первая дорожка
-                        );
+                            endMs: totalSeconds,
+                            iDTrack: 1 // по умолчанию первая дорожка 
+                        ); //TODO При Drag Drop учитывать дорожку на позиции курсора
 
                         audioTracks.Add(audioTrack);
                         RenderAudioClip(audioTrack);
@@ -280,11 +264,10 @@ namespace TabStream2
             if (targetRow == null)
                 return;
 
-            double totalMs = 60000; // Например, длина таймлайна — 1 минута
-            double canvasWidth = TimeRuler.ActualWidth;
-
-            double left = (track.StartMs / totalMs) * canvasWidth;
-            double width = ((track.EndMs - track.StartMs) / totalMs) * canvasWidth;
+            // Перевод секунд в пиксели согласно шкале (20 px/сек)
+            double pixelsPerSecond = PixelsPerSecondBase;
+            double left = Calculate.SSToX(track.StartMs);
+            double width = Calculate.SSToX(Math.Max(0, track.EndMs - track.StartMs));
 
             var clipRect = new Border
             {
@@ -309,51 +292,6 @@ namespace TabStream2
             targetRow.Children.Add(clipRect);
         }
 
-        private void TimeRulerScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            //if (TimeRuler == null || TracksContainer == null)
-            //    return;
-
-            //double oldScale = zoomScale;
-            //double zoomDelta = e.Delta > 0 ? 1.1 : 1.0 / 1.1;
-            //double newScale = Math.Max(MinZoom, Math.Min(MaxZoom, oldScale * zoomDelta));
-            //if (Math.Abs(newScale - oldScale) < 0.0001)
-            //{
-            //    e.Handled = true;
-            //    return;
-            //}
-
-            //Point mousePosInViewer = e.GetPosition(TimeRulerScrollViewer);
-            //double mouseX = mousePosInViewer.X;
-            //double oldOffset = TimeRulerScrollViewer.HorizontalOffset;
-
-            //zoomScale = newScale;
-            //ApplyZoom();
-
-            //double newOffset = ((oldOffset + mouseX) / oldScale) * newScale - mouseX;
-            //TimeRulerScrollViewer.ScrollToHorizontalOffset(newOffset);
-            //TracksScrollViewer.ScrollToHorizontalOffset(newOffset);
-
-            //// Обновляем позицию PlayHead при изменении зума
-            //UpdatePlayheadPosition();
-            //e.Handled = true;
-        }
-
-        private void ApplyZoom()
-        {
-            var scaleX = zoomScale;
-            if (TimeRulerScale != null)
-            {
-                TimeRulerScale.ScaleX = scaleX;
-            }
-            if (TracksScale != null)
-            {
-                TracksScale.ScaleX = scaleX;
-            }
-            
-            // PlayHead теперь не зависит от масштаба - он всегда в позиции мыши
-        }
-
         private void TimeRulerScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
         {
             TrackNamesScrollViewer.ScrollToVerticalOffset(e.VerticalOffset);
@@ -361,7 +299,10 @@ namespace TabStream2
             {
                 TracksScrollViewer.ScrollToHorizontalOffset(e.HorizontalOffset);
                 // Обновляем позицию PlayHead при прокрутке
-                UpdatePlayheadPosition();
+                if (!isDraggingPlayhead)
+                {
+                    UpdatePlayheadPosition();
+                }
             }
         }
 
@@ -372,7 +313,10 @@ namespace TabStream2
             {
                 TimeRulerScrollViewer.ScrollToHorizontalOffset(e.HorizontalOffset);
                 // Обновляем позицию PlayHead при прокрутке
-                UpdatePlayheadPosition();
+                if (!isDraggingPlayhead)
+                {
+                    UpdatePlayheadPosition();
+                }
             }
         }
 
@@ -389,38 +333,59 @@ namespace TabStream2
             if (!isDraggingPlayhead) return;
 
             var rect = (Rectangle)sender;
-            var canvas = (Canvas)rect.Parent;
+            // Используем известный Canvas напрямую, чтобы избежать NRE при перерисовке
+            var canvas = TimeRuler;
 
             Point mousePos = e.GetPosition(canvas);
-            double x = mousePos.X - playhead.PCurPos.X;
+
+            // Позиция курсора относительно левого края rect внутри canvas => желаемая позиция rect по X
+            double desiredRectX = mousePos.X - playhead.PCurPos.X;
+
+            // Текущее окно/вьюпорт
+            double viewportWidth = TimeRulerScrollViewer?.ViewportWidth > 0
+                ? TimeRulerScrollViewer.ViewportWidth
+                : (TimeRuler.ActualWidth > 0 ? TimeRuler.ActualWidth : 1200);
+            double pixelsPerSecond = PixelsPerSecondBase;
+
+            // Рассчитываем абсолютную Х-позицию в пикселях по всей шкале
+            double rectX = desiredRectX;
+            // Кламп по полной ширине TimeRuler
+            double maxX = TimeRuler.Width - rect.Width;
+            rectX = Math.Max(0.0, Math.Min(rectX, maxX));
+
+            // По вертикали — в пределах канвы
             double y = mousePos.Y - playhead.PCurPos.Y;
-
-            // --- ГРАНИЦЫ CANVAS ---
-            // Минимум (верхний левый угол)
-            double minX = 0;
-            double minY = 0;
-
-            // Максимум (нижний правый угол)
-            double maxX = canvas.ActualWidth - rect.Width;
             double maxY = canvas.ActualHeight - rect.Height;
+            y = Math.Max(0.0, Math.Min(y, maxY));
 
-            // Ограничиваем координаты, чтобы фигура не выходила за Canvas
-            x = Math.Max(minX, Math.Min(x, maxX));
-            y = Math.Max(minY, Math.Min(y, maxY));
-
-            // --- Применяем скорректированные координаты ---
-            Canvas.SetLeft(rect, x);
+            Canvas.SetLeft(rect, rectX);
             Canvas.SetTop(rect, y);
 
-            foreach (UIElement element in CPlayheadCanvas.Children)
+            // Автопрокрутка ScrollViewer, чтобы RCurPos оставался видимым
+            if (TimeRulerScrollViewer != null)
             {
-                if (element is Line line)
+                double currentOffset = TimeRulerScrollViewer.HorizontalOffset;
+                double rightEdge = currentOffset + viewportWidth;
+                double targetLeft = rectX;
+                double targetRight = rectX + rect.Width;
+
+                if (targetLeft < currentOffset)
                 {
-                    double xLine = Canvas.GetLeft(line);
-                    xLine = x+5;
-                    Canvas.SetLeft(line, xLine);
+                    TimeRulerScrollViewer.ScrollToHorizontalOffset(targetLeft);
+                    TracksScrollViewer.ScrollToHorizontalOffset(targetLeft);
+                }
+                else if (targetRight > rightEdge)
+                {
+                    double newOffset = targetRight - viewportWidth;
+                    TimeRulerScrollViewer.ScrollToHorizontalOffset(newOffset);
+                    TracksScrollViewer.ScrollToHorizontalOffset(newOffset);
                 }
             }
+
+            // Абсолютная позиция плейхеда в пикселях (центр RCurPos)
+            playhead.CurrentPos = rectX + 5.0;
+            // Обновим положение линии поверх треков с учётом текущего HorizontalOffset
+            UpdatePlayheadPosition();
         }
 
         private void RCurPos_MouseUp(object sender, MouseButtonEventArgs e)
@@ -428,6 +393,29 @@ namespace TabStream2
             var rect = (Rectangle)sender;
             isDraggingPlayhead = false;
             rect.ReleaseMouseCapture();
+        }
+
+        private void PlayButton_Click(object sender, RoutedEventArgs e)
+        {
+            double startSeconds = Calculate.XToSS(playhead.CurrentPos);
+            string path = audioTracks[0].AudioPath.OriginalString;
+            using (var audioFile = new AudioFileReader(path))
+            {
+                // Проверяем, не превышает ли указанное время длину файла
+                if (startSeconds < audioFile.TotalTime.TotalSeconds)
+                {
+                    // Устанавливаем позицию (время начала)
+                    audioFile.CurrentTime = TimeSpan.FromSeconds(startSeconds);
+                }
+                else
+                {
+                    return;
+                }
+                
+                outputDevice.Init(audioFile);
+                outputDevice.Play();
+
+            }
         }
     }
 }
