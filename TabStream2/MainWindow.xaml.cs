@@ -507,9 +507,16 @@ namespace TabStream2
             UpdatePlayheadPosition();
         }
 
+        public void SetPos()
+        {
+            double pos = Canvas.GetLeft(PlayheadLine);
+
+            playhead.CurrentPos = pos;
+        }
+
         private void PlayButton_Click(object sender, RoutedEventArgs e)
         {
-
+            SetPos();
             double startSeconds = Calculate.XToSS(playhead.CurrentPos);
             if (audioTracks.Count > 0)
             {
@@ -523,7 +530,7 @@ namespace TabStream2
                 }
                 else
                 {
-                    currentReader.CurrentTime = TimeSpan.Zero;
+                    return;
                 }
 
                 outputDevice?.Stop();
