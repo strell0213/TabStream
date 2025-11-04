@@ -30,7 +30,7 @@
                     <Button x:Name="StopButton" Content="⏹" Width="80" Height="30" Margin="5,0"
                     Background="#FFF44336" Foreground="White" FontWeight="Bold"/>
                     <Button x:Name="PauseButton" Content="⏸" Width="80" Height="30" Margin="5,0"
-                    Background="#FFFF9800" Foreground="White" FontWeight="Bold"/>
+                    Background="#FFFF9800" Foreground="White" FontWeight="Bold" Click="PauseButton_Click"/>
                 </StackPanel>
             </Border>
 
@@ -63,7 +63,7 @@
 
                         <ScrollViewer Grid.Column="1" x:Name="TimeRulerScrollViewer"
                           HorizontalScrollBarVisibility="Hidden"
-                          VerticalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Hidden"
                           Background="Transparent"
                           ScrollChanged="TimeRulerScrollViewer_ScrollChanged">
                             <Canvas x:Name="TimeRuler" Height="30" Background="#FF333333" MouseLeftButtonDown="TimeRuler_MouseLeftButtonDown" MouseLeftButtonUp="TimeRuler_MouseLeftButtonUp" MouseMove="TimeRuler_MouseMove">
@@ -86,8 +86,9 @@
                 <!-- === Tracks (right) === -->
                 <ScrollViewer Grid.Row="1" Grid.Column="1"
                   x:Name="TracksScrollViewer"
-                  VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Auto" ScrollChanged="TracksScrollViewer_ScrollChanged">
+                  HorizontalScrollBarVisibility="Hidden"
+                  VerticalScrollBarVisibility="Hidden"
+                  ScrollChanged="TracksScrollViewer_ScrollChanged">
                     <StackPanel x:Name="TracksContainer" Background="#FF252525">
                         <StackPanel.LayoutTransform>
                             <ScaleTransform x:Name="TracksScale" ScaleX="1" ScaleY="1"/>

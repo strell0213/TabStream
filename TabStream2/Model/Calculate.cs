@@ -19,5 +19,10 @@ namespace TabStream2
             double X = ss * 20;
             return X;
         }
+
+        static public double MillisecondsToSeconds(double mm)
+        {
+            return mm / 1000;
+        }
     }
 }

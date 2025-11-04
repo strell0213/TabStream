@@ -15,6 +15,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using TabStream2.Model;
 using NAudio.Wave;
+using System.Windows.Threading;
 
 namespace TabStream2
 {
@@ -26,17 +27,22 @@ namespace TabStream2
         Playhead playhead;
         List<AudioTrack> audioTracks;
         List<Track> listTrack;
+        DispatcherTimer timerPlay;
+        Rectangle MainRect;
         static IWavePlayer outputDevice;
+        AudioFileReader currentReader;
+
+        System.Diagnostics.Stopwatch renderStopwatch;
+        TimeSpan lastRenderElapsed;
+        TimeSpan accumulatedRenderDelta;
 
         bool isDraggingPlayhead=false;
         double zoomScale = 1.0;
-        const double MinZoom = 0.2;
-        const double MaxZoom = 8.0;
         const double PixelsPerSecondBase = 20.0;
-            // Смещение временной шкалы в секундах (окно просмотра)
-            double timeOffsetSeconds = 0.0;
-            // Максимальная длительность: 10:00:00 = 36000 сек
-            const double MaxTimelineSeconds = 36000.0;
+
+        // Максимальная длительность: 10:00:00 = 36000 сек
+        const double MaxTimelineSeconds = 36000.0;
+        const double playMilliseconds = 100;
         public MainWindow()
         {
             InitializeComponent();
@@ -46,7 +52,61 @@ namespace TabStream2
             playhead = new Playhead(0, PlayheadLine.Stroke);
             audioTracks = new List<AudioTrack>();
             listTrack = new List<Track>();
+
+            InitTimerPlay();
             GenerateTracks();
+        }
+
+        public void InitTimerPlay()
+        {
+            timerPlay = new DispatcherTimer();
+            timerPlay.Interval = TimeSpan.FromMilliseconds(playMilliseconds);
+            timerPlay.Tick += TimerPlay_Tick;
+        }
+
+        private void TimerPlay_Tick(object sender, EventArgs e)
+        {
+            double plusX = Calculate.SSToX(Calculate.MillisecondsToSeconds(playMilliseconds));
+            GoPlayholder(plusX);
+        }
+
+        private void StartRenderLoop()
+        {
+            if (renderStopwatch == null)
+                renderStopwatch = new System.Diagnostics.Stopwatch();
+            lastRenderElapsed = TimeSpan.Zero;
+            accumulatedRenderDelta = TimeSpan.Zero;
+            renderStopwatch.Restart();
+            CompositionTarget.Rendering -= CompositionTarget_Rendering; // avoid double subscription
+            CompositionTarget.Rendering += CompositionTarget_Rendering;
+        }
+
+        private void StopRenderLoop()
+        {
+            CompositionTarget.Rendering -= CompositionTarget_Rendering;
+            if (renderStopwatch != null && renderStopwatch.IsRunning)
+                renderStopwatch.Stop();
+        }
+
+        private void CompositionTarget_Rendering(object sender, EventArgs e)
+        {
+            if (renderStopwatch == null) return;
+            var elapsed = renderStopwatch.Elapsed;
+            var delta = elapsed - lastRenderElapsed;
+            lastRenderElapsed = elapsed;
+
+            if (delta <= TimeSpan.Zero) return;
+
+            accumulatedRenderDelta += delta;
+            var step = TimeSpan.FromMilliseconds(playMilliseconds);
+
+            // Выполняем ровно по шагам playMilliseconds. Если кадры запаздывают, делаем несколько шагов, чтобы догнать время.
+            while (accumulatedRenderDelta >= step)
+            {
+                double plusX = Calculate.SSToX(Calculate.MillisecondsToSeconds(playMilliseconds));
+                GoPlayholder(plusX);
+                accumulatedRenderDelta -= step;
+            }
         }
 
         public void DrawTimeRuler()
@@ -106,6 +166,7 @@ namespace TabStream2
             rec.MouseMove += RCurPos_MouseMove;
             rec.MouseUp += RCurPos_MouseUp;
             TimeRuler.Children.Add(rec);
+            MainRect = rec;
         }
 
 
@@ -395,27 +456,88 @@ namespace TabStream2
             rect.ReleaseMouseCapture();
         }
 
+        public void GoPlayholder(double plusPos)
+        {
+            Rectangle rect = MainRect;
+
+            if (rect == null) return;
+
+            var canvas = TimeRuler;
+
+            double desiredRectX = playhead.CurrentPos + plusPos;
+
+            // Получаем ширину/размеры
+            double viewportWidth = TimeRulerScrollViewer?.ViewportWidth > 0
+                ? TimeRulerScrollViewer.ViewportWidth
+                : (TimeRuler.ActualWidth > 0 ? TimeRuler.ActualWidth : 1200);
+            double pixelsPerSecond = PixelsPerSecondBase;
+
+            // Ограничиваем позицию в-пределах границ по всей шкале
+            double rectX = desiredRectX;
+            // Проверка на максимальную ширину TimeRuler
+            double maxX = TimeRuler.Width - rect.Width;
+            rectX = Math.Max(0.0, Math.Min(rectX, maxX));
+
+            Canvas.SetLeft(rect, rectX);
+
+            // Автопрокрутка ScrollViewer, если RCurPos выходит за границы
+            if (TimeRulerScrollViewer != null)
+            {
+                double currentOffset = TimeRulerScrollViewer.HorizontalOffset;
+                double rightEdge = currentOffset + viewportWidth;
+                double targetLeft = rectX;
+                double targetRight = rectX + rect.Width;
+
+                if (targetLeft < currentOffset)
+                {
+                    TimeRulerScrollViewer.ScrollToHorizontalOffset(targetLeft);
+                    TracksScrollViewer.ScrollToHorizontalOffset(targetLeft);
+                }
+                else if (targetRight > rightEdge)
+                {
+                    double newOffset = targetRight - viewportWidth;
+                    TimeRulerScrollViewer.ScrollToHorizontalOffset(newOffset);
+                    TracksScrollViewer.ScrollToHorizontalOffset(newOffset);
+                }
+            }
+
+            // Обновляем позицию плейхолдера в позицию (прямо RCurPos)
+            playhead.CurrentPos = rectX + 5.0;
+            // Обновляем визуальное отображение PlayHead с учетом текущего скрола HorizontalOffset
+            UpdatePlayheadPosition();
+        }
+
         private void PlayButton_Click(object sender, RoutedEventArgs e)
         {
+
             double startSeconds = Calculate.XToSS(playhead.CurrentPos);
-            string path = audioTracks[0].AudioPath.OriginalString;
-            using (var audioFile = new AudioFileReader(path))
+            if (audioTracks.Count > 0)
             {
-                // Проверяем, не превышает ли указанное время длину файла
-                if (startSeconds < audioFile.TotalTime.TotalSeconds)
+                string path = audioTracks[0].AudioPath.OriginalString;
+                // Инициализируем и храним reader, чтобы не был освобожден преждевременно
+                currentReader?.Dispose();
+                currentReader = new AudioFileReader(path);
+                if (startSeconds < currentReader.TotalTime.TotalSeconds)
                 {
-                    // Устанавливаем позицию (время начала)
-                    audioFile.CurrentTime = TimeSpan.FromSeconds(startSeconds);
+                    currentReader.CurrentTime = TimeSpan.FromSeconds(startSeconds);
                 }
                 else
                 {
-                    return;
+                    currentReader.CurrentTime = TimeSpan.Zero;
                 }
-                
-                outputDevice.Init(audioFile);
-                outputDevice.Play();
 
+                outputDevice?.Stop();
+                outputDevice.Init(currentReader);
+                outputDevice.Play();
             }
+            // Запускаем визуальный плавный рендер-цикл всегда, даже без аудио
+            StartRenderLoop();
+        }
+
+        private void PauseButton_Click(object sender, RoutedEventArgs e)
+        {
+            outputDevice.Stop();
+            StopRenderLoop();
         }
     }
 }
