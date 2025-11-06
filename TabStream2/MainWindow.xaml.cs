@@ -16,6 +16,7 @@ using System.Windows.Shapes;
 using TabStream2.Model;
 using NAudio.Wave;
 using System.Windows.Threading;
+using System.Diagnostics;
 
 namespace TabStream2
 {
@@ -27,14 +28,9 @@ namespace TabStream2
         Playhead playhead;
         List<AudioTrack> audioTracks;
         List<Track> listTrack;
-        DispatcherTimer timerPlay;
         Rectangle MainRect;
         static IWavePlayer outputDevice;
         AudioFileReader currentReader;
-
-        System.Diagnostics.Stopwatch renderStopwatch;
-        TimeSpan lastRenderElapsed;
-        TimeSpan accumulatedRenderDelta;
 
         bool isDraggingPlayhead=false;
         double zoomScale = 1.0;
@@ -43,6 +39,10 @@ namespace TabStream2
         // Максимальная длительность: 10:00:00 = 36000 сек
         const double MaxTimelineSeconds = 36000.0;
         const double playMilliseconds = 100;
+        // Rendering-based playhead fields
+        bool isRenderingLoopActive = false;
+        Stopwatch renderStopwatch = new Stopwatch();
+        double startSecondsOffset = 0.0; // seconds where playback started (from playhead)
         public MainWindow()
         {
             InitializeComponent();
@@ -53,60 +53,7 @@ namespace TabStream2
             audioTracks = new List<AudioTrack>();
             listTrack = new List<Track>();
 
-            InitTimerPlay();
             GenerateTracks();
-        }
-
-        public void InitTimerPlay()
-        {
-            timerPlay = new DispatcherTimer();
-            timerPlay.Interval = TimeSpan.FromMilliseconds(playMilliseconds);
-            timerPlay.Tick += TimerPlay_Tick;
-        }
-
-        private void TimerPlay_Tick(object sender, EventArgs e)
-        {
-            double plusX = Calculate.SSToX(Calculate.MillisecondsToSeconds(playMilliseconds));
-            GoPlayholder(plusX);
-        }
-
-        private void StartRenderLoop()
-        {
-            if (renderStopwatch == null)
-                renderStopwatch = new System.Diagnostics.Stopwatch();
-            lastRenderElapsed = TimeSpan.Zero;
-            accumulatedRenderDelta = TimeSpan.Zero;
-            renderStopwatch.Restart();
-            CompositionTarget.Rendering -= CompositionTarget_Rendering; // avoid double subscription
-            CompositionTarget.Rendering += CompositionTarget_Rendering;
-        }
-
-        private void StopRenderLoop()
-        {
-            CompositionTarget.Rendering -= CompositionTarget_Rendering;
-            if (renderStopwatch != null && renderStopwatch.IsRunning)
-                renderStopwatch.Stop();
-        }
-
-        private void CompositionTarget_Rendering(object sender, EventArgs e)
-        {
-            if (renderStopwatch == null) return;
-            var elapsed = renderStopwatch.Elapsed;
-            var delta = elapsed - lastRenderElapsed;
-            lastRenderElapsed = elapsed;
-
-            if (delta <= TimeSpan.Zero) return;
-
-            accumulatedRenderDelta += delta;
-            var step = TimeSpan.FromMilliseconds(playMilliseconds);
-
-            // Выполняем ровно по шагам playMilliseconds. Если кадры запаздывают, делаем несколько шагов, чтобы догнать время.
-            while (accumulatedRenderDelta >= step)
-            {
-                double plusX = Calculate.SSToX(Calculate.MillisecondsToSeconds(playMilliseconds));
-                GoPlayholder(plusX);
-                accumulatedRenderDelta -= step;
-            }
         }
 
         public void DrawTimeRuler()
@@ -250,8 +197,7 @@ namespace TabStream2
             double relativeX = absoluteX - scrollOffset;
             double scaledX = relativeX * zoomScale;
 
-            // Отладочная информация
-            System.Diagnostics.Debug.WriteLine($"UpdatePlayhead - absoluteX: {absoluteX:F2}, scrollOffset: {scrollOffset:F2}, relativeX: {relativeX:F2}, zoomScale: {zoomScale:F2}, scaledX: {scaledX:F2}");
+            // Убрали Debug.WriteLine для улучшения производительности
 
             // Устанавливаем PlayHead в правильную позицию
             Canvas.SetLeft(PlayheadLine, scaledX);
@@ -538,13 +484,58 @@ namespace TabStream2
                 outputDevice.Play();
             }
             // Запускаем визуальный плавный рендер-цикл всегда, даже без аудио
-            StartRenderLoop();
+            StartRenderingLoop(startSeconds);
         }
 
         private void PauseButton_Click(object sender, RoutedEventArgs e)
         {
             outputDevice.Stop();
-            StopRenderLoop();
+            StopRenderingLoop();
+        }
+
+        private void StartRenderingLoop(double startSeconds)
+        {
+            startSecondsOffset = startSeconds;
+            if (!isRenderingLoopActive)
+            {
+                CompositionTarget.Rendering += OnCompositionTargetRendering;
+                isRenderingLoopActive = true;
+            }
+            renderStopwatch.Restart();
+        }
+
+        private void StopRenderingLoop()
+        {
+            if (isRenderingLoopActive)
+            {
+                CompositionTarget.Rendering -= OnCompositionTargetRendering;
+                isRenderingLoopActive = false;
+            }
+            renderStopwatch.Stop();
+        }
+
+        private void OnCompositionTargetRendering(object sender, EventArgs e)
+        {
+            double elapsedSeconds;
+            // Если есть аудио и оно играет, берём точное время из плеера
+            if (currentReader != null && outputDevice != null && outputDevice.PlaybackState == PlaybackState.Playing)
+            {
+                elapsedSeconds = currentReader.CurrentTime.TotalSeconds;
+            }
+            else
+            {
+                elapsedSeconds = startSecondsOffset + renderStopwatch.Elapsed.TotalSeconds;
+            }
+
+            // Конвертация секунд в пиксели по формуле: секунды * 20
+            double targetX = elapsedSeconds * PixelsPerSecondBase;
+
+            // Перемещаем плейхолдер: передаем дельту относительно текущего положения
+            double delta = targetX - playhead.CurrentPos;
+            if (Math.Abs(delta) > 0.001)
+            {
+                GoPlayholder(delta);
+            }
         }
     }
 }
